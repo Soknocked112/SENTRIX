@@ -1,0 +1,85 @@
+# ==============================================================================
+# eBPF-RL-TCN Intrusion Prevention System (IPS) Configuration
+# ==============================================================================
+
+project:
+  name: "ebpf_rl_tcn_ips"
+  version: "1.0.0"
+  description: "An eBPF-Driven Deep Reinforcement Learning and TCN Framework for Intrusion Prevention"
+  random_seed: 42
+
+data:
+  raw_data_dir: "CICIDS 2017"
+  processed_data_dir: "data/processed"
+  sequence_length: 10          # Number of temporal steps in sliding window
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  # Balanced sampling per class for efficient and balanced training (set null for full dataset)
+  sample_size_per_class: 15000
+  # Target attack class mapping (6 consolidated classes)
+  classes:
+    0: "BENIGN"
+    1: "DoS"
+    2: "DDoS"
+    3: "PortScan"
+    4: "BruteForce"
+    5: "WebAttack"
+
+tcn:
+  input_features: 78           # Standard numeric features extracted from CICIDS 2017
+  num_channels: [64, 64, 64, 64] # 4 dilated residual blocks (receptive field = 31 steps)
+  kernel_size: 3
+  dropout: 0.20
+  latent_dim: 32               # Latent embedding dimension extracted for DRL state
+  num_classes: 6
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 128
+  epochs: 15
+  early_stopping_patience: 4
+  device: "cpu"                # "cpu" or "cuda"
+
+drl:
+  state_dim: 40                # 32 (TCN latent embedding) + 8 (flow dynamics & system metrics)
+  action_dim: 4                # 0: PASS, 1: DROP, 2: RATE_LIMIT, 3: DEEP_INSPECT
+  hidden_dims: [128, 64]
+  learning_rate_actor: 0.0003
+  learning_rate_critic: 0.001
+  gamma: 0.99                  # Discount factor
+  gae_lambda: 0.95             # Generalized Advantage Estimation parameter
+  clip_eps: 0.20               # PPO clipping epsilon
+  entropy_coef: 0.01           # Exploration bonus
+  value_loss_coef: 0.50
+  k_epochs: 4                  # Number of PPO update epochs per rollout
+  batch_size: 64
+  max_episodes: 200
+  steps_per_episode: 500
+  device: "cpu"
+
+environment:
+  # Multi-objective IPS reward formulation
+  reward_tp_drop: 10.0         # True Positive: blocked attack flow
+  reward_tn_pass: 2.0          # True Negative: forwarded legitimate flow
+  penalty_fp_drop: -50.0       # False Positive: dropped benign user traffic (severe!)
+  penalty_fn_pass: -30.0       # False Negative: passed malicious traffic undetected
+  reward_rate_limit_attack: 5.0 # Attack throttled via token bucket
+  penalty_rate_limit_benign: -10.0 # Benign traffic improperly throttled
+  cost_deep_inspect: -0.5      # Computational overhead for buffer inspection
+  inspect_accuracy_boost: 0.99 # Inspection resolves ambiguous flows with 99% certainty
+
+ebpf:
+  interface: "lo"              # Default network interface for XDP attachment
+  use_simulator: true          # Set true to use high-fidelity simulator, false for real XDP driver
+  c_source_path: "c_src/xdp_ips.c"
+  max_blocked_ips: 65536
+  max_rate_limits: 65536
+  max_flow_stats: 65536
+  default_block_duration_sec: 300
+  default_rate_limit_pps: 100
+  burst_capacity: 50
+
+paths:
+  checkpoints_dir: "checkpoints"
+  results_dir: "results"
+  logs_dir: "logs"

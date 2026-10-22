@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Large datasets & binaries
+CICIDS 2017/
+data/processed/*.npz
+data/processed/*.parquet
+artifacts/*.pkl
+
+# Model Checkpoints & Large artifacts
+checkpoints/*.pth
+checkpoints/*.pt
+
+# Evaluation Results (keep folder structure)
+results/*.png
+results/*.json
+!results/.gitkeep
+logs/*.log
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# C / eBPF objects
+c_src/*.o
+c_src/*.so
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
