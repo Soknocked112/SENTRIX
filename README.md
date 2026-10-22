@@ -407,9 +407,9 @@ GitHub: [@Soknocked112](https://github.com/Soknocked112)
 If you reference this work or architecture in your research:
 
 ```bibtex
-@article{saha_sentrix_2026,
+@article{sentrix_2026,
   title={SENTRIX: An eBPF-Driven Deep Reinforcement Learning and TCN Framework for Intrusion Prevention},
-  author={Saha, Sounak and IPS Research Team},
+  author={IPS Research Team},
   year={2026},
   journal={GitHub Repository},
   url={https://github.com/Soknocked112/SENTRIX}
