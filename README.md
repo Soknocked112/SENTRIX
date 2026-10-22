@@ -401,8 +401,6 @@ All 14 tests pass cleanly without external dependencies.
 
 ## Authors & Citation
 
-GitHub: [@Soknocked112](https://github.com/Soknocked112)
-
 If you reference this work or architecture in your research:
 
 ```bibtex
