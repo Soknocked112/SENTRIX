@@ -159,14 +159,18 @@ flowchart TD
 ### 1. Dilated Causal Convolution (TCN)
 For a 1D sequence input $\mathbf{x} \in \mathbb{R}^T$ and a filter $f: \{0, \dots, K-1\} \to \mathbb{R}$, the dilated causal convolution at time step $t$ with dilation factor $d$ is formulated as:
 
-$$\mathbf{y}(t) = (\mathbf{x} *_d f)(t) = \sum_{k=0}^{K-1} f(k) \cdot \mathbf{x}(t - d \cdot k)$$
+$$
+\mathbf{y}(t) = (\mathbf{x} \ast_d f)(t) = \sum_{k=0}^{K-1} f(k) \cdot \mathbf{x}(t - d \cdot k)
+$$
 
 Where:
 - $K$ is the kernel size ($K=3$).
 - $d \in \{1, 2, 4, 8\}$ doubles exponentially across network depth.
 - The effective receptive field across $L$ layers is:
 
-$$\text{Receptive Field} = 1 + \sum_{l=0}^{L-1} (K_l - 1) \cdot d_l$$
+$$
+\text{Receptive Field} = 1 + \sum_{l=0}^{L-1} (K_l - 1) \cdot d_l
+$$
 
 ### 2. Multi-Objective IPS Mitigation Reward
 Unlike standard classifiers, the RL agent operates in a real-world cost-asymmetric environment:
@@ -179,29 +183,35 @@ Unlike standard classifiers, the RL agent operates in a real-world cost-asymmetr
 | `PASS` | Attack traffic | **-30.0** | False Negative — Security breach penalty |
 | `RATE_LIMIT` | Attack traffic | **+5.0** | Proportional throttling of suspicious flow |
 | `RATE_LIMIT` | Benign traffic | **-10.0** | Unnecessary QoS degradation penalty |
-| `DEEP_INSPECT` | Any traffic | **-0.5 + R_resolved** | Inspection buffer computational overhead |
+| `DEEP_INSPECT` | Any traffic | **-0.5 + R(resolved)** | Inspection buffer computational overhead |
 
 Mathematically defined as:
 
-$$R(s, a) = 
+$$
+R(s, a) = 
 \begin{cases} 
-+10.0 & \text{if } a = \text{DROP} \land \text{is\_attack} \\
-+2.0 & \text{if } a = \text{PASS} \land \neg\text{is\_attack} \\
--50.0 & \text{if } a = \text{DROP} \land \neg\text{is\_attack} \\
--30.0 & \text{if } a = \text{PASS} \land \text{is\_attack} \\
-+5.0 & \text{if } a = \text{RATE\_LIMIT} \land \text{is\_attack} \\
--10.0 & \text{if } a = \text{RATE\_LIMIT} \land \neg\text{is\_attack} \\
--0.5 + R_{\text{resolved}} & \text{if } a = \text{DEEP\_INSPECT}
-\end{cases}$$
++10.0 & \text{if } a = \text{DROP} \text{ and flow is malicious} \\
++2.0 & \text{if } a = \text{PASS} \text{ and flow is benign} \\
+-50.0 & \text{if } a = \text{DROP} \text{ and flow is benign} \\
+-30.0 & \text{if } a = \text{PASS} \text{ and flow is malicious} \\
++5.0 & \text{if } a = \text{RATE-LIMIT} \text{ and flow is malicious} \\
+-10.0 & \text{if } a = \text{RATE-LIMIT} \text{ and flow is benign} \\
+-0.5 + R_{\mathrm{resolved}} & \text{if } a = \text{DEEP-INSPECT}
+\end{cases}
+$$
 
 ### 3. PPO Clipped Surrogate Objective
 The policy network parameter $\theta$ is updated via the clipped objective:
 
-$$L^{\text{CLIP}}(\theta) = \hat{\mathbb{E}}_t \left[ \min\left( r_t(\theta) \hat{A}_t, \, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t \right) \right]$$
+$$
+L^{\mathrm{CLIP}}(\theta) = \hat{\mathbb{E}}_t \left[ \min\left( r_t(\theta) \hat{A}_t, \, \operatorname{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_t \right) \right]
+$$
 
-Where the probability ratio is $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}$ and $\hat{A}_t$ is computed via Generalized Advantage Estimation (GAE-$\lambda$):
+Where the probability ratio is $r_t(\theta) = \frac{\pi_\theta(a_t \mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t \mid s_t)}$ and $\hat{A}_t$ is computed via Generalized Advantage Estimation (GAE-$\lambda$):
 
-$$\hat{A}_t = \sum_{l=0}^{\infty} (\gamma \lambda)^l \delta_{t+l}^V, \quad \delta_t^V = r_t + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)$$
+$$
+\hat{A}_t = \sum_{l=0}^{\infty} (\gamma \lambda)^l \delta_{t+l}^V, \quad \delta_t^V = r_t + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)
+$$
 
 ---
 
