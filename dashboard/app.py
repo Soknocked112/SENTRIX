@@ -19,8 +19,7 @@ from models.drl_agent import PPOAgent
 from models.tcn import TCNThreatDetector
 
 st.set_page_config(
-    page_title="eBPF-RL-TCN IPS Dashboard",
-    page_icon="🛡️",
+    page_title="SENTRIX - eBPF-RL-TCN IPS",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -77,20 +76,20 @@ def load_system():
 cfg, orchestrator, ebpf_backend = load_system()
 
 # Sidebar
-st.sidebar.title("🛡️ eBPF-RL-TCN IPS")
+st.sidebar.title("SENTRIX IPS")
 st.sidebar.markdown("**Intrusion Prevention Control Plane**")
 st.sidebar.info(
     "Architecture:\n"
-    "- **Data Plane:** eBPF / XDP\n"
-    "- **Feature Extractor:** Dilated Causal TCN\n"
-    "- **Mitigation Agent:** PPO Actor-Critic\n"
-    "- **Dataset:** CIC-IDS 2017"
+    "- Data Plane: Linux eBPF / XDP\n"
+    "- Feature Extractor: Dilated Causal TCN\n"
+    "- Mitigation Agent: PPO Actor-Critic\n"
+    "- Dataset: CIC-IDS 2017"
 )
 
 mode = st.sidebar.radio("Navigation", ["Live Traffic Replay", "Model & Benchmark Metrics", "Active eBPF Rules"])
 
 if mode == "Live Traffic Replay":
-    st.header("⚡ Real-Time Packet Stream & Mitigation Replay")
+    st.header("Packet Stream and Mitigation Replay")
 
     col1, col2, col3, col4 = st.columns(4)
     metrics = ebpf_backend.get_metrics()
@@ -103,7 +102,7 @@ if mode == "Live Traffic Replay":
     c1, c2, c3 = st.columns([2, 1, 1])
     attack_filter = c1.selectbox("Select Traffic Profile to Inject", ["Mixed Realistic Traffic"] + CLASS_NAMES)
     num_packets = c2.slider("Packets to Inject", min_value=10, max_value=200, value=30, step=10)
-    trigger = c3.button("🚀 Replay Traffic Stream", use_container_width=True)
+    trigger = c3.button("Replay Traffic Stream", use_container_width=True)
 
     if trigger:
         test_npz = os.path.join(cfg["data"]["processed_data_dir"], "test_data.npz")
@@ -161,7 +160,7 @@ if mode == "Live Traffic Replay":
         )
 
 elif mode == "Model & Benchmark Metrics":
-    st.header("📊 Detection & Prevention Benchmarks")
+    st.header("Detection and Prevention Benchmarks")
     results_dir = cfg["paths"]["results_dir"]
 
     col1, col2 = st.columns(2)
@@ -185,7 +184,7 @@ elif mode == "Model & Benchmark Metrics":
         st.json(summary)
 
 elif mode == "Active eBPF Rules":
-    st.header("🛡️ In-Kernel / Simulated eBPF Map State")
+    st.header("eBPF Kernel and Map State")
 
     blocks = ebpf_backend.get_active_blocks()
     st.subheader(f"Blocked IP Table ({len(blocks)} active rules)")

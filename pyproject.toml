@@ -8,7 +8,10 @@ version = "1.0.0"
 description = "An eBPF-Driven Deep Reinforcement Learning and TCN Framework for Intrusion Prevention"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "IPS Research Team" }]
+authors = [
+    { name = "Sounak Saha", email = "sounak.saha.9475@gmail.com" },
+    { name = "IPS Research Team" }
+]
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.0.0",
