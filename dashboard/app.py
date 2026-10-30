@@ -257,10 +257,11 @@ kpi3.metric("Legitimate Forwarded", f"{metrics.passed_packets:,}")
 kpi4.metric("Active Block Rules", f"{len(ebpf_backend.get_active_blocks()):,}")
 
 # Primary Navigation Tabs
-tab_live, tab_stress, tab_benchmarks, tab_maps = st.tabs([
+tab_live, tab_stress, tab_benchmarks, tab_research, tab_maps = st.tabs([
     "Live Traffic Monitor",
     "High-Speed Stress Engine",
     "Model Benchmarks & Metrics",
+    "Research Baselines & Artifacts",
     "Kernel BPF Hash Tables",
 ])
 
@@ -535,7 +536,83 @@ with tab_benchmarks:
         m_col4.metric("Median Decision Latency", f"{pp.get('latency_p50_us', 1496):.1f} µs")
 
 # ---------------------------------------------------------------------------
-# TAB 4: Kernel BPF Hash Tables
+# TAB 4: Research Baselines & Artifacts
+# ---------------------------------------------------------------------------
+with tab_research:
+    st.subheader("Architectural Baseline Comparison & Publication Artifacts")
+    st.markdown(
+        "Quantitative comparison of SENTRIX against monolithic and stateless baselines, demonstrating how split-plane "
+        "offloading resolves the latency-fidelity tradeoff in wire-speed intrusion prevention."
+    )
+
+    baseline_json = os.path.join(results_dir, "baseline_comparison.json")
+    if os.path.exists(baseline_json):
+        with open(baseline_json, "r") as f:
+            b_data = json.load(f)
+
+        rows = []
+        for arch, vals in b_data.items():
+            rows.append({
+                "Architecture": arch,
+                "P50 Latency (µs)": f"{vals['p50_latency_us']:.2f} µs",
+                "P99 Latency (µs)": f"{vals['p99_latency_us']:.2f} µs",
+                "Macro F1-Score": f"{vals['f1_score']*100:.2f}%",
+                "False Positive Rate": f"{vals['fpr']*100:.2f}%",
+                "Kernel Offloaded": "Yes (XDP)" if vals["kernel_offloaded"] else "No (Userspace)",
+                "Temporal Sequence Awareness": "Yes (TCN)" if vals["temporal_adaptive"] else "No",
+            })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    b_plot = os.path.join(results_dir, "baseline_comparison.png")
+    if os.path.exists(b_plot):
+        st.image(b_plot, caption="Empirical Baseline Benchmarks (Operational Latency vs Mitigation F1-Score)", use_container_width=True)
+
+    st.markdown("#### Research Paper Architectural Schematics")
+    col_arch1, col_arch2 = st.columns(2)
+    with col_arch1:
+        arch_fig = "paper/figures/fig1_architecture.png"
+        if os.path.exists(arch_fig):
+            st.image(arch_fig, caption="Fig 1: SENTRIX Split-Plane System Architecture")
+    with col_arch2:
+        tcn_fig = "paper/figures/fig2_tcn_receptive_field.png"
+        if os.path.exists(tcn_fig):
+            st.image(tcn_fig, caption="Fig 2: Dilated Causal TCN Exponential Receptive Field (R=31)")
+
+    st.markdown("#### Publication Manuscripts & Source Documents")
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        if os.path.exists("paper/main.tex"):
+            with open("paper/main.tex", "r") as f:
+                st.download_button(
+                    "Download LaTeX Manuscript (.tex)",
+                    f.read(),
+                    file_name="sentrix_ieee_manuscript.tex",
+                    mime="text/x-tex",
+                    use_container_width=True,
+                )
+    with d2:
+        if os.path.exists("paper/references.bib"):
+            with open("paper/references.bib", "r") as f:
+                st.download_button(
+                    "Download BibTeX References (.bib)",
+                    f.read(),
+                    file_name="references.bib",
+                    mime="text/plain",
+                    use_container_width=True,
+                )
+    with d3:
+        if os.path.exists("paper/RESEARCH_PAPER.md"):
+            with open("paper/RESEARCH_PAPER.md", "r") as f:
+                st.download_button(
+                    "Download Full Research Paper (.md)",
+                    f.read(),
+                    file_name="RESEARCH_PAPER.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+
+# ---------------------------------------------------------------------------
+# TAB 5: Kernel BPF Hash Tables
 # ---------------------------------------------------------------------------
 with tab_maps:
     st.subheader("Linux In-Kernel BPF Table Inspection")
