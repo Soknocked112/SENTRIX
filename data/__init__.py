@@ -1,7 +1,3 @@
-"""
-Data module for CICIDS 2017 preprocessing, scaling, and sequence loading.
-"""
-
 from data.dataset import CICIDSDataset, get_dataloaders
 from data.preprocess import (
     CLASS_NAMES,

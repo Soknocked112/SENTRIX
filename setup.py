@@ -4,8 +4,7 @@ setup(
     name="ebpf-rl-tcn-ips",
     version="1.0.0",
     description="An eBPF-Driven Deep Reinforcement Learning and TCN Framework for Intrusion Prevention",
-    author="Sounak Saha, IPS Research Team",
-    author_email="sounak.saha.9475@gmail.com",
+    author="SENTRIX Project Team",
     packages=find_packages(),
     python_requires=">=3.10",
     install_requires=[

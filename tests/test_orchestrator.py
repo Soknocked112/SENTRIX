@@ -1,7 +1,3 @@
-"""
-test_orchestrator.py - Unit tests for end-to-end IPS Orchestrator
-"""
-
 import numpy as np
 import pytest
 from ebpf.xdp_simulator import XDPSimulator

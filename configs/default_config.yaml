@@ -1,11 +1,7 @@
-# ==============================================================================
-# eBPF-RL-TCN Intrusion Prevention System (IPS) Configuration
-# ==============================================================================
-
 project:
   name: "ebpf_rl_tcn_ips"
   version: "1.0.0"
-  description: "An eBPF-Driven Deep Reinforcement Learning and TCN Framework for Intrusion Prevention"
+  description: "eBPF-driven RL and TCN intrusion prevention system"
   random_seed: 42
 
 data:
@@ -59,14 +55,14 @@ drl:
 
 environment:
   # Multi-objective IPS reward formulation
-  reward_tp_drop: 10.0         # True Positive: blocked attack flow
-  reward_tn_pass: 2.0          # True Negative: forwarded legitimate flow
-  penalty_fp_drop: -50.0       # False Positive: dropped benign user traffic (severe!)
-  penalty_fn_pass: -30.0       # False Negative: passed malicious traffic undetected
-  reward_rate_limit_attack: 5.0 # Attack throttled via token bucket
-  penalty_rate_limit_benign: -10.0 # Benign traffic improperly throttled
-  cost_deep_inspect: -0.5      # Computational overhead for buffer inspection
-  inspect_accuracy_boost: 0.99 # Inspection resolves ambiguous flows with 99% certainty
+  reward_tp_drop: 10.0         # True positive (drop malicious)
+  reward_tn_pass: 2.0          # True negative (pass benign)
+  penalty_fp_drop: -50.0       # False positive penalty (dropped benign traffic)
+  penalty_fn_pass: -30.0       # False negative penalty (passed malicious traffic)
+  reward_rate_limit_attack: 5.0 # Throttled malicious flow
+  penalty_rate_limit_benign: -10.0 # Throttled benign flow
+  cost_deep_inspect: -0.5      # Inspection latency cost
+  inspect_accuracy_boost: 0.99
 
 ebpf:
   interface: "lo"              # Default network interface for XDP attachment

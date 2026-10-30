@@ -1,10 +1,3 @@
-"""
-ips_orchestrator.py - End-to-End Runtime Orchestrator
-
-Bridges the eBPF Data Plane with the TCN Feature Extractor and DRL Control Plane:
-Packet Arrival -> Sliding Window Buffer -> TCN Threat Detection -> DRL Action -> eBPF Map Update.
-"""
-
 from collections import deque
 import logging
 import os
@@ -30,10 +23,7 @@ logger = logging.getLogger("ips_orchestrator")
 
 
 class IPSOrchestrator:
-    """
-    Central IPS Controller coordinating in-kernel eBPF/XDP filtering,
-    TCN temporal flow classification, and DRL policy decision enforcement.
-    """
+    """Coordinates packet buffer, model inference, and eBPF rule updates."""
 
     def __init__(
         self,
@@ -59,10 +49,7 @@ class IPSOrchestrator:
         self.latent_dim = latent_dim
         self.state_dim = state_dim
 
-        # Temporal flow window buffer per IP or aggregated
         self.flow_buffer: Deque[np.ndarray] = deque(maxlen=sequence_length)
-
-        # Operational Performance Metrics
         self.processed_flows = 0
         self.decision_latencies_us: List[float] = []
         self.action_counts = {
@@ -73,7 +60,6 @@ class IPSOrchestrator:
         }
 
     def reset_buffer(self):
-        """Clear temporal flow history buffer."""
         self.flow_buffer.clear()
 
     def process_flow_event(
@@ -85,18 +71,10 @@ class IPSOrchestrator:
         dst_port: int = 80,
         proto: int = 6,
     ) -> Dict[str, Any]:
-        """
-        Process a single arriving flow observation:
-        1. Fast-path check in eBPF maps (is IP already blocked?).
-        2. Append features to temporal buffer.
-        3. If window is full, run TCN + DRL inference.
-        4. Apply policy action to eBPF data plane.
-        5. Return execution summary and latency.
-        """
         t_start = time.perf_counter_ns()
         self.processed_flows += 1
 
-        # STAGE 1: Fast Path - eBPF Map Lookup
+        # Check existing kernel/simulator block
         if self.ebpf.is_ip_blocked(src_ip):
             t_end = time.perf_counter_ns()
             latency_us = (t_end - t_start) / 1000.0
@@ -113,16 +91,14 @@ class IPSOrchestrator:
                 "verdict": "XDP_DROP",
             }
 
-        # STAGE 2: Temporal Buffer Update
+        # Update sliding window buffer
         self.flow_buffer.append(features)
-
-        # Pad with initial frame if buffer not yet full
         while len(self.flow_buffer) < self.seq_len:
             self.flow_buffer.appendleft(features)
 
-        window_arr = np.array(self.flow_buffer, dtype=np.float32)  # (seq_len, num_features)
+        window_arr = np.array(self.flow_buffer, dtype=np.float32)
 
-        # STAGE 3: TCN Temporal Feature Extraction & Threat Detection
+        # Run TCN inference for threat detection and embedding
         with torch.no_grad():
             tensor_in = torch.FloatTensor(window_arr).unsqueeze(0).to(self.device)
             if self.tcn is not None:
@@ -138,8 +114,7 @@ class IPSOrchestrator:
                 if len(latent_vec) < self.latent_dim:
                     latent_vec = np.pad(latent_vec, (0, self.latent_dim - len(latent_vec)))
 
-        # STAGE 4: Construct State Observation for DRL Agent
-        # Latent TCN embedding (32) + Flow Dynamics (8) = 40
+        # Build state observation (latent + flow statistics)
         metrics = self.ebpf.get_metrics()
         flow_dynamics = np.array([
             float(features[0]) if len(features) > 0 else 0.0,
@@ -154,16 +129,14 @@ class IPSOrchestrator:
 
         state_obs = np.concatenate([latent_vec, flow_dynamics]).astype(np.float32)
 
-        # STAGE 5: DRL Action Selection
+        # Decide policy action
         if self.agent is not None:
             action, _, _ = self.agent.select_action(state_obs, deterministic=True)
         else:
-            # Baseline policy: if TCN predicts attack (class > 0), drop, else pass
             action = ACTION_DROP if pred_class > 0 else ACTION_PASS
 
         self.action_counts[action] = self.action_counts.get(action, 0) + 1
 
-        # STAGE 6: Enforce Action on eBPF Data Plane
         action_names = {
             ACTION_PASS: "PASS",
             ACTION_DROP: "DROP",
@@ -172,6 +145,7 @@ class IPSOrchestrator:
         }
         action_name = action_names.get(action, "UNKNOWN")
 
+        # Apply mitigation rule
         if action == ACTION_DROP:
             self.ebpf.block_ip(src_ip, duration_sec=300.0, reason=f"TCN-DRL Class {pred_class}")
             verdict = "XDP_DROP"

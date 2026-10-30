@@ -1,13 +1,3 @@
-/*
- * xdp_ips.c - Real-Time eBPF / XDP High-Performance Packet Filter
- *
- * Provides in-kernel packet inspection and sub-millisecond verdict execution:
- * 1. O(1) IP Blocklist filtering via BPF Hash Map (XDP_DROP).
- * 2. Token Bucket Rate Limiting per IP/subnet (XDP_DROP / XDP_PASS).
- * 3. 5-Tuple Flow tracking & statistical aggregation.
- * 4. High-performance event forwarding to userspace TCN-DRL Control Plane.
- */
-
 #define KBUILD_MODNAME "xdp_ips"
 #include <uapi/linux/bpf.h>
 #include <linux/in.h>
@@ -17,19 +7,10 @@
 #include <linux/udp.h>
 #include "common_kern.h"
 
-/* Map 1: Dynamic Blocked IPs (populated by DRL Agent) */
 BPF_TABLE("hash", __u32, struct ip_block_entry, blocked_ips_map, 65536);
-
-/* Map 2: Active Rate Limiters (Token Bucket) */
 BPF_TABLE("hash", __u32, struct token_bucket, rate_limit_map, 65536);
-
-/* Map 3: 5-Tuple Active Flow Tracking Table */
 BPF_TABLE("hash", struct flow_key, struct flow_stats, flow_stats_map, 65536);
-
-/* Map 4: Per-CPU Aggregated IPS Counters */
 BPF_TABLE("percpu_array", __u32, struct ips_counters, metrics_map, 1);
-
-/* Perf Event Output for Real-Time Threat Alerts */
 BPF_PERF_OUTPUT(alert_events);
 
 static inline int parse_ipv4(void *data, void *data_end, __u64 *nh_off, struct iphdr **iph) {
@@ -48,22 +29,19 @@ int xdp_ips_filter(struct xdp_md *ctx) {
     __u64 now_ns = bpf_ktime_get_ns();
     __u32 zero = 0;
 
-    /* Retrieve per-cpu counter */
     struct ips_counters *counters = metrics_map.lookup(&zero);
     if (counters) {
         counters->rx_packets++;
     }
 
-    /* Bound check Ethernet Header */
+    /* Ethernet header boundary check */
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end)
         return XDP_PASS;
 
-    /* Filter only IPv4 traffic for this pipeline */
     if (eth->h_proto != __constant_htons(ETH_P_IP))
         return XDP_PASS;
 
-    /* Parse IPv4 header */
     struct iphdr *iph = NULL;
     int proto = parse_ipv4(data, data_end, &nh_off, &iph);
     if (proto < 0 || !iph)
@@ -73,9 +51,7 @@ int xdp_ips_filter(struct xdp_md *ctx) {
     __u32 dst_ip = iph->daddr;
     __u16 pkt_len = (__u16)(data_end - data);
 
-    /* ---------------------------------------------------------
-     * STAGE 1: Check Dynamic IP Blocklist (DRL Action: DROP)
-     * --------------------------------------------------------- */
+    /* 1. Fast path: check blocked IPs */
     struct ip_block_entry *block = blocked_ips_map.lookup(&src_ip);
     if (block) {
         if (now_ns < block->expiry_ts_ns) {
@@ -83,18 +59,14 @@ int xdp_ips_filter(struct xdp_md *ctx) {
             if (counters) counters->dropped_packets++;
             return XDP_DROP;
         } else {
-            /* Block expired: allow removal by control plane or auto-pass */
             blocked_ips_map.delete(&src_ip);
         }
     }
 
-    /* ---------------------------------------------------------
-     * STAGE 2: Check Token Bucket Rate Limiter (DRL Action: RATE_LIMIT)
-     * --------------------------------------------------------- */
+    /* 2. Token bucket rate limit check */
     struct token_bucket *tb = rate_limit_map.lookup(&src_ip);
     if (tb) {
         __u64 elapsed_ns = now_ns - tb->last_update_ns;
-        /* Replenish tokens based on elapsed time and configured PPS */
         __u64 added_tokens = (elapsed_ns * tb->rate_pps) / 1000000000ULL;
         if (added_tokens > 0) {
             tb->tokens += added_tokens;
@@ -108,7 +80,6 @@ int xdp_ips_filter(struct xdp_md *ctx) {
             tb->tokens--;
             if (counters) counters->passed_packets++;
         } else {
-            /* Token exhausted: drop packet */
             if (counters) {
                 counters->dropped_packets++;
                 counters->rate_limited_packets++;
@@ -117,9 +88,7 @@ int xdp_ips_filter(struct xdp_md *ctx) {
         }
     }
 
-    /* ---------------------------------------------------------
-     * STAGE 3: Extract Flow Metadata & Update Statistics
-     * --------------------------------------------------------- */
+    /* 3. 5-tuple flow aggregation */
     struct flow_key key = {};
     key.src_ip = src_ip;
     key.dst_ip = dst_ip;

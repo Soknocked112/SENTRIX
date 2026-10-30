@@ -1,7 +1,3 @@
-"""
-cli_monitor.py - Terminal Live Monitor for eBPF-RL-TCN IPS Engine
-"""
-
 import sys
 import time
 from typing import Any, Dict

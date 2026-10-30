@@ -1,7 +1,3 @@
-"""
-test_env.py - Unit tests for Gymnasium IPSEnvironment and Reward Functions
-"""
-
 import numpy as np
 import pytest
 from environment.ips_env import IPSEnvironment

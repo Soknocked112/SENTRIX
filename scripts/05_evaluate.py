@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-05_evaluate.py - Benchmark and Quantitative Evaluation Suite for eBPF-RL-TCN IPS
-"""
 
 import argparse
 import json
@@ -10,7 +7,6 @@ from pathlib import Path
 import sys
 import time
 
-# Ensure project root is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import matplotlib.pyplot as plt
 import numpy as np
@@ -73,7 +69,7 @@ def evaluate_tcn_model(model, X_test, y_test, results_dir):
     cm_path = os.path.join(results_dir, "confusion_matrix.png")
     plt.savefig(cm_path, dpi=300)
     plt.close()
-    print(f"[+] Confusion matrix plot saved to {cm_path}")
+    print(f"Confusion matrix plot saved to {cm_path}")
 
     return {
         "accuracy": float(accuracy),
@@ -148,7 +144,7 @@ def evaluate_prevention_pipeline(orchestrator, X_test, y_test, results_dir):
     plt.tight_layout()
     plt.savefig(lat_path, dpi=300)
     plt.close()
-    print(f"[+] Latency distribution plot saved to {lat_path}")
+    print(f"Latency distribution plot saved to {lat_path}")
 
     # Plot Policy Action Heatmap
     plt.figure(figsize=(8, 6))
@@ -161,7 +157,7 @@ def evaluate_prevention_pipeline(orchestrator, X_test, y_test, results_dir):
     act_path = os.path.join(results_dir, "action_policy_distribution.png")
     plt.savefig(act_path, dpi=300)
     plt.close()
-    print(f"[+] Action policy distribution heatmap saved to {act_path}")
+    print(f"Action policy distribution heatmap saved to {act_path}")
 
     return {
         "benign_pass_rate": float(benign_passed / benign_total),
@@ -243,7 +239,7 @@ def main():
     metrics_json_path = os.path.join(results_dir, "evaluation_metrics.json")
     with open(metrics_json_path, "w") as f:
         json.dump(summary, f, indent=2)
-    print(f"\n[+] Full evaluation metrics saved to {metrics_json_path}")
+    print(f"\nEvaluation metrics saved to {metrics_json_path}")
 
 
 if __name__ == "__main__":

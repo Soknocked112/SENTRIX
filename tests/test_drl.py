@@ -1,7 +1,3 @@
-"""
-test_drl.py - Unit tests for PPO Actor-Critic Agent and Rollout Buffer
-"""
-
 import numpy as np
 import pytest
 import torch

@@ -1,7 +1,3 @@
-"""
-test_ebpf_simulator.py - Unit tests for eBPF Map Simulator and XDP verdicts
-"""
-
 import time
 import pytest
 from ebpf.xdp_simulator import XDP_DROP, XDP_PASS, XDPSimulator

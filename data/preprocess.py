@@ -1,16 +1,9 @@
-"""
-preprocess.py - Ingestion, Cleaning, Scaling, and Temporal Windowing for CICIDS 2017
-
-Transforms raw CIC-IDS 2017 network flow records into cleaned, scaled,
-temporal sequence windows suitable for Temporal Convolutional Networks (TCN)
-and Deep Reinforcement Learning (DRL) agents.
-"""
-
 import argparse
 import glob
 import json
 import logging
 import os
+import re
 from typing import Dict, List, Optional, Tuple
 
 import joblib
@@ -70,8 +63,6 @@ CLASS_NAMES = {
     5: "WebAttack",
 }
 
-
-import re
 
 def clean_label_string(val: str) -> str:
     """Normalize label strings by fixing non-ASCII dashes and spaces."""

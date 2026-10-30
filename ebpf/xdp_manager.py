@@ -1,10 +1,3 @@
-"""
-xdp_manager.py - BCC-based eBPF/XDP Kernel Loader and Map Controller
-
-Manages real kernel attachment via BCC (when running as root) and seamlessly
-falls back to XDPSimulator when non-root privileges are detected.
-"""
-
 import ctypes
 import ipaddress
 import logging
@@ -20,20 +13,15 @@ logger = logging.getLogger("ebpf_manager")
 
 
 def ip_to_u32(ip_str: str) -> int:
-    """Convert IPv4 string to 32-bit unsigned integer (network byte order)."""
     return int.from_bytes(socket.inet_aton(ip_str), byteorder="little")
 
 
 def u32_to_ip(ip_u32: int) -> str:
-    """Convert 32-bit unsigned integer to IPv4 string."""
     return socket.inet_ntoa(ip_u32.to_bytes(4, byteorder="little"))
 
 
 class XDPManager(BPFMapInterface):
-    """
-    Production eBPF/XDP manager supporting both real kernel execution (via BCC)
-    and userspace simulation fallback.
-    """
+    """Handles BCC attachment to network interface or falls back to simulator."""
 
     def __init__(
         self,
@@ -48,7 +36,7 @@ class XDPManager(BPFMapInterface):
         self.simulator: Optional[XDPSimulator] = None
 
         if force_simulator or os.geteuid() != 0:
-            logger.info("Non-root environment or simulator forced: initializing high-speed XDPSimulator.")
+            logger.info("Non-root or simulator requested, using userspace backend.")
             self.simulator = XDPSimulator()
             self.is_kernel_mode = False
         else:
@@ -61,12 +49,12 @@ class XDPManager(BPFMapInterface):
                     fn = self.bpf.load_func("xdp_ips_filter", BPF.XDP)
                     self.bpf.attach_xdp(self.interface, fn, 0)
                     self.is_kernel_mode = True
-                    logger.info(f"eBPF XDP filter successfully attached to interface: {self.interface}")
+                    logger.info(f"Attached XDP filter to interface {self.interface}")
                 else:
                     logger.warning(f"C source file not found at {c_source_path}, falling back to simulator.")
                     self.simulator = XDPSimulator()
             except Exception as e:
-                logger.warning(f"Kernel eBPF initialization failed ({e}), falling back to XDPSimulator.")
+                logger.warning(f"Kernel eBPF initialization failed ({e}), falling back to simulator.")
                 self.simulator = XDPSimulator()
                 self.is_kernel_mode = False
 

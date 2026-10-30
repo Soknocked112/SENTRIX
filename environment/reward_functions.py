@@ -1,12 +1,3 @@
-"""
-reward_functions.py - Multi-Objective Reward Formulations for Intrusion Prevention
-
-Balances security efficacy against operational availability and inspection overhead:
-- Heavy penalty for False Positives (dropping benign users degrades SLA).
-- Substantial reward for True Positives (mitigating attacks protects infrastructure).
-- Proportional rewards for Rate Limiting and penalties for unnecessary deep inspection.
-"""
-
 from typing import Dict, Tuple
 
 ACTION_PASS = 0
@@ -16,7 +7,7 @@ ACTION_DEEP_INSPECT = 3
 
 
 class IPSRewardFunction:
-    """Configurable reward computer for the IPS Gymnasium Environment."""
+    """Calculates step rewards based on mitigation decision vs ground truth."""
 
     def __init__(
         self,
@@ -42,10 +33,6 @@ class IPSRewardFunction:
         is_attack: bool,
         threat_class: int = 0,
     ) -> Tuple[float, Dict[str, bool]]:
-        """
-        Compute scalar reward and classification outcome indicator.
-        Returns: (reward, outcome_dict)
-        """
         outcome = {
             "tp": False,
             "tn": False,
@@ -82,7 +69,6 @@ class IPSRewardFunction:
 
         elif action == ACTION_DEEP_INSPECT:
             outcome["inspected"] = True
-            # Deep inspection resolves the flow with near-certainty
             base_cost = self.cost_deep_inspect
             if is_attack:
                 reward = base_cost + self.reward_tp_drop * 0.8

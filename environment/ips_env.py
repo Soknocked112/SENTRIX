@@ -1,10 +1,3 @@
-"""
-ips_env.py - Gymnasium-compliant Intrusion Prevention Reinforcement Learning Environment
-
-Simulates sequential network flow arrivals, TCN temporal state embedding,
-eBPF/XDP fast-path verdicts, and reward calculation based on mitigation accuracy.
-"""
-
 from typing import Any, Dict, Optional, Tuple
 
 import gymnasium as gym
@@ -25,17 +18,9 @@ from environment.reward_functions import (
 
 class IPSEnvironment(gym.Env):
     """
-    Gymnasium Environment for Deep Reinforcement Learning IPS.
-    
-    Observation Space: Box(40,)
-      - 32-dim latent embedding from TCN
-      - 8-dim dynamic flow and eBPF state metrics
-      
-    Action Space: Discrete(4)
-      - 0: PASS
-      - 1: DROP
-      - 2: RATE_LIMIT
-      - 3: DEEP_INSPECT
+    Gymnasium environment simulating intrusion prevention decisions.
+    State: 32-dim latent embedding + 8-dim flow/system dynamics (40 total).
+    Actions: 0=PASS, 1=DROP, 2=RATE_LIMIT, 3=DEEP_INSPECT.
     """
 
     metadata = {"render_modes": ["human"]}
@@ -70,10 +55,7 @@ class IPSEnvironment(gym.Env):
             self.tcn_model.eval()
             self.tcn_model.to(self.device)
 
-        # Action: 0=PASS, 1=DROP, 2=RATE_LIMIT, 3=DEEP_INSPECT
         self.action_space = spaces.Discrete(4)
-
-        # Observation: Latent TCN embedding (32) + Flow Metrics (8) = 40
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -85,7 +67,6 @@ class IPSEnvironment(gym.Env):
         self.current_idx = 0
         self.total_samples = len(self.X_seq) if self.X_seq is not None else 1000
 
-        # Episode Metrics Tracking
         self.ep_reward = 0.0
         self.ep_tp = 0
         self.ep_tn = 0
@@ -95,31 +76,26 @@ class IPSEnvironment(gym.Env):
         self.ep_inspected = 0
 
     def _extract_tcn_embedding(self, x_seq_sample: np.ndarray) -> np.ndarray:
-        """Extract latent representation from TCN model or fallback projection."""
         if self.tcn_model is not None:
             with torch.no_grad():
                 tensor_in = torch.FloatTensor(x_seq_sample).unsqueeze(0).to(self.device)
                 _, latent = self.tcn_model(tensor_in)
                 return latent.cpu().numpy().squeeze(0)
         else:
-            # Deterministic projection fallback for initial setup / dry-runs
             flat = x_seq_sample[-1, : self.latent_dim]
             if len(flat) < self.latent_dim:
                 flat = np.pad(flat, (0, self.latent_dim - len(flat)))
             return flat.astype(np.float32)
 
     def _get_flow_dynamics_features(self, x_seq_sample: np.ndarray) -> np.ndarray:
-        """Extract 8-dimensional operational network and eBPF status vector."""
         metrics = self.ebpf_backend.get_metrics()
         last_step = x_seq_sample[-1]
 
-        # Selected representative flow dynamics from last flow record
         f_flow_dur = float(last_step[0]) if len(last_step) > 0 else 0.0
         f_fwd_pkts = float(last_step[1]) if len(last_step) > 1 else 0.0
         f_bwd_pkts = float(last_step[2]) if len(last_step) > 2 else 0.0
         f_fwd_len  = float(last_step[3]) if len(last_step) > 3 else 0.0
 
-        # System state
         drop_ratio = float(metrics.drop_ratio)
         active_blocks = float(len(self.ebpf_backend.get_active_blocks())) / 1000.0
         rx_rate = float(metrics.rx_packets % 100) / 100.0
@@ -137,7 +113,6 @@ class IPSEnvironment(gym.Env):
         ], dtype=np.float32)
 
     def _build_observation(self, idx: int) -> np.ndarray:
-        """Construct full 40-dim observation vector."""
         if self.X_seq is not None:
             sample_seq = self.X_seq[idx]
         else:
@@ -145,8 +120,7 @@ class IPSEnvironment(gym.Env):
 
         latent = self._extract_tcn_embedding(sample_seq)
         dynamics = self._get_flow_dynamics_features(sample_seq)
-        obs = np.concatenate([latent, dynamics]).astype(np.float32)
-        return obs
+        return np.concatenate([latent, dynamics]).astype(np.float32)
 
     def reset(
         self,
@@ -154,11 +128,9 @@ class IPSEnvironment(gym.Env):
         seed: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
-        """Reset the environment to start a new episode."""
         super().reset(seed=seed)
 
         self.current_step = 0
-        # Choose a random starting offset in dataset
         if self.X_seq is not None and len(self.X_seq) > self.max_steps:
             self.current_idx = np.random.randint(0, len(self.X_seq) - self.max_steps)
         else:
@@ -177,7 +149,6 @@ class IPSEnvironment(gym.Env):
         return obs, {}
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        """Execute action, update eBPF rules, calculate reward, advance state."""
         idx = self.current_idx + self.current_step
 
         if self.y_binary is not None and idx < len(self.y_binary):
@@ -187,16 +158,13 @@ class IPSEnvironment(gym.Env):
             is_attack = bool(np.random.rand() > 0.5)
             threat_class = 1 if is_attack else 0
 
-        # Generate synthetic IP for eBPF rule tracking
         pseudo_ip = f"10.0.{threat_class}.{idx % 254 + 1}"
 
-        # Apply Action to eBPF Data Plane
         if action == ACTION_DROP:
             self.ebpf_backend.block_ip(pseudo_ip, duration_sec=300.0, reason="DRL DROP")
         elif action == ACTION_RATE_LIMIT:
             self.ebpf_backend.set_rate_limit(pseudo_ip, rate_pps=50.0, burst=25.0)
 
-        # Simulate packet processing in eBPF backend
         self.ebpf_backend.process_packet(
             src_ip=pseudo_ip,
             dst_ip="192.168.1.1",
@@ -205,7 +173,6 @@ class IPSEnvironment(gym.Env):
             proto=6,
         )
 
-        # Calculate reward
         reward, outcome = self.reward_fn.compute(action, is_attack, threat_class)
         self.ep_reward += reward
 

@@ -1,7 +1,3 @@
-"""
-Environment module for IPS Gymnasium simulation.
-"""
-
 from environment.ips_env import IPSEnvironment
 from environment.reward_functions import (
     ACTION_DEEP_INSPECT,

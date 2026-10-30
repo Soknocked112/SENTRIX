@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-02_train_tcn.py - Train Temporal Convolutional Network (TCN) on CICIDS 2017
-"""
 
 import argparse
 import json
@@ -10,7 +7,6 @@ from pathlib import Path
 import sys
 import time
 
-# Ensure project root is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import matplotlib.pyplot as plt
 import numpy as np
@@ -99,16 +95,16 @@ def main():
     os.makedirs(ckpt_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
 
-    print(f"[*] Loading datasets from {data_dir}...")
+    print(f"Loading datasets from {data_dir}...")
     train_loader, val_loader, test_loader = get_dataloaders(data_dir=data_dir, batch_size=batch_size)
 
     # Determine input feature count
     sample_x, _, _ = next(iter(train_loader))
     input_features = sample_x.shape[2]
-    print(f"[+] Loaded data: input shape = {sample_x.shape} (Batch, Seq_Len, Features={input_features})")
+    print(f"Loaded data: input shape = {sample_x.shape}")
 
     # Initialize TCN model
-    print(f"[*] Initializing TCN Threat Detector (Channels={num_channels}, Latent={latent_dim}, Classes={num_classes})...")
+    print(f"Initializing TCN (channels={num_channels}, latent={latent_dim}, classes={num_classes})...")
     model = TCNThreatDetector(
         input_features=input_features,
         num_channels=num_channels,
@@ -125,7 +121,7 @@ def main():
     best_val_acc = 0.0
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
 
-    print(f"[*] Starting TCN training on {device} for {epochs} epochs...")
+    print(f"Starting TCN training on {device} for {epochs} epochs...")
     start_time = time.time()
 
     for epoch in range(1, epochs + 1):
@@ -157,17 +153,17 @@ def main():
                 "latent_dim": latent_dim,
                 "num_classes": num_classes,
             }, best_path)
-            print(f"  [+] Saved new best model checkpoint to {best_path} (Val Acc: {val_acc*100:.2f}%)")
+            print(f"  Saved best checkpoint to {best_path} (val acc: {val_acc*100:.2f}%)")
 
     total_time = time.time() - start_time
-    print(f"[+] TCN Training finished in {total_time:.1f}s. Best Val Accuracy: {best_val_acc*100:.2f}%")
+    print(f"Training completed in {total_time:.1f}s. Best val accuracy: {best_val_acc*100:.2f}%")
 
     # Evaluate on Test Set
-    print("[*] Evaluating best model on unseen Test Set...")
+    print("Evaluating best model on test set...")
     best_ckpt = torch.load(os.path.join(ckpt_dir, "tcn_best.pth"), map_location=device)
     model.load_state_dict(best_ckpt["model_state_dict"])
     test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-    print(f"[+] Final Test Set Evaluation -> Loss: {test_loss:.4f}, Accuracy: {test_acc*100:.2f}%")
+    print(f"Test Set Evaluation -> Loss: {test_loss:.4f}, Accuracy: {test_acc*100:.2f}%")
 
     # Plot & Save Training Curves
     plt.figure(figsize=(12, 5))
@@ -193,7 +189,7 @@ def main():
     plt.tight_layout()
     plt.savefig(plot_path, dpi=300)
     plt.close()
-    print(f"[+] Training curves saved to {plot_path}")
+    print(f"Training curves saved to {plot_path}")
 
 
 if __name__ == "__main__":

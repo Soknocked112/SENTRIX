@@ -1,7 +1,3 @@
-"""
-test_tcn.py - Unit tests for Temporal Convolutional Network (TCN)
-"""
-
 import pytest
 import torch
 from models.tcn import Chomp1d, TCNThreatDetector, TemporalBlock, TemporalConvNet

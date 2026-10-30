@@ -1,11 +1,3 @@
-"""
-tcn.py - Temporal Convolutional Network (TCN) for Network Intrusion Detection
-
-Implements Dilated Causal 1D Convolutions with Residual Blocks.
-Provides threat classification and extracts latent temporal feature embeddings
-used as the state observation for the Deep Reinforcement Learning (DRL) agent.
-"""
-
 from typing import List, Optional, Tuple
 
 import torch
@@ -14,10 +6,7 @@ import torch.nn.functional as F
 
 
 class Chomp1d(nn.Module):
-    """
-    Causal padding adjustment: removes the extra padded elements on the right
-    to guarantee that convolutions do not leak future information.
-    """
+    """Prunes right-side padding so convolutions remain strictly causal."""
 
     def __init__(self, chomp_size: int):
         super().__init__()
@@ -30,11 +19,6 @@ class Chomp1d(nn.Module):
 
 
 class TemporalBlock(nn.Module):
-    """
-    Residual Block with two dilated causal convolution layers,
-    batch normalization, ReLU activation, and dropout.
-    """
-
     def __init__(
         self,
         n_inputs: int,
@@ -70,7 +54,6 @@ class TemporalBlock(nn.Module):
             self.conv2, self.chomp2, self.bn2, self.relu2, self.dropout2
         )
 
-        # 1x1 conv for residual dimension matching if input and output channels differ
         self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
         self.relu = nn.ReLU()
 
@@ -81,10 +64,6 @@ class TemporalBlock(nn.Module):
 
 
 class TemporalConvNet(nn.Module):
-    """
-    Stack of TemporalBlocks with exponentially increasing dilations (1, 2, 4, 8, ...).
-    """
-
     def __init__(
         self,
         num_inputs: int,
@@ -120,9 +99,10 @@ class TemporalConvNet(nn.Module):
 
 class TCNThreatDetector(nn.Module):
     """
-    Dual-head Temporal Convolutional Network:
-    1. Threat Classification Head (multi-class intrusion detection logits)
-    2. Latent Representation Head (temporal feature embedding fed to DRL)
+    TCN for sequence classification and latent embedding extraction.
+    Outputs:
+      - logits: threat class predictions
+      - latent: intermediate representation fed into the RL policy
     """
 
     def __init__(
@@ -142,7 +122,6 @@ class TCNThreatDetector(nn.Module):
         self.latent_dim = latent_dim
         self.num_classes = num_classes
 
-        # Temporal Backbone
         self.tcn = TemporalConvNet(
             num_inputs=input_features,
             num_channels=num_channels,
@@ -151,15 +130,12 @@ class TCNThreatDetector(nn.Module):
         )
 
         last_channel = num_channels[-1]
-
-        # Latent Temporal Projection Head
         self.latent_proj = nn.Sequential(
             nn.Linear(last_channel, latent_dim),
             nn.LayerNorm(latent_dim),
             nn.ReLU(),
         )
 
-        # Classification Head
         self.classifier = nn.Sequential(
             nn.Linear(latent_dim, 64),
             nn.ReLU(),
@@ -168,31 +144,17 @@ class TCNThreatDetector(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Input shape: (batch_size, seq_len, input_features)
-        Returns:
-            logits: (batch_size, num_classes)
-            latent: (batch_size, latent_dim)
-        """
-        # Transpose from (B, T, F) to (B, F, T) for 1D convolution
+        # (B, T, F) -> (B, F, T) for 1D convolution
         x_trans = x.transpose(1, 2)
+        tcn_out = self.tcn(x_trans)
 
-        # Pass through dilated causal TCN
-        tcn_out = self.tcn(x_trans)  # (B, C_last, T)
-
-        # Extract features at the most recent time step (t = -1)
-        last_step_features = tcn_out[:, :, -1]  # (B, C_last)
-
-        # Generate latent representation
-        latent = self.latent_proj(last_step_features)  # (B, latent_dim)
-
-        # Generate class logits
-        logits = self.classifier(latent)  # (B, num_classes)
+        # Slice the last time step (t = -1)
+        latent = self.latent_proj(tcn_out[:, :, -1])
+        logits = self.classifier(latent)
 
         return logits, latent
 
     def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
-        """Extract only the latent temporal embedding (for DRL observation)."""
         self.eval()
         with torch.no_grad():
             _, latent = self.forward(x)

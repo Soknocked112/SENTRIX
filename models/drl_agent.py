@@ -1,13 +1,3 @@
-"""
-drl_agent.py - Deep Reinforcement Learning (PPO) Actor-Critic Agent for IPS
-
-Learns active mitigation policies:
-- PASS: Allow flow through without penalty.
-- DROP: Instant in-kernel eBPF/XDP drop rule insertion.
-- RATE_LIMIT: Token bucket traffic throttling.
-- DEEP_INSPECT: Buffer flow for deep payload inspection.
-"""
-
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -19,8 +9,6 @@ from torch.distributions import Categorical
 
 
 class ActorNetwork(nn.Module):
-    """Policy Network mapping state observations to action probabilities."""
-
     def __init__(self, state_dim: int, action_dim: int, hidden_dims: List[int] = [128, 64]):
         super().__init__()
         layers = []
@@ -39,8 +27,6 @@ class ActorNetwork(nn.Module):
 
 
 class CriticNetwork(nn.Module):
-    """Value Network estimating the expected cumulative return V(s)."""
-
     def __init__(self, state_dim: int, hidden_dims: List[int] = [128, 64]):
         super().__init__()
         layers = []
@@ -58,8 +44,6 @@ class CriticNetwork(nn.Module):
 
 
 class RolloutBuffer:
-    """Stores on-policy trajectory transitions during an episode rollout."""
-
     def __init__(self):
         self.states: List[torch.Tensor] = []
         self.actions: List[torch.Tensor] = []
@@ -81,10 +65,6 @@ class RolloutBuffer:
 
 
 class PPOAgent:
-    """
-    Proximal Policy Optimization (PPO) Agent with Generalized Advantage Estimation (GAE).
-    """
-
     def __init__(
         self,
         state_dim: int = 40,
@@ -124,10 +104,6 @@ class PPOAgent:
         state: np.ndarray,
         deterministic: bool = False,
     ) -> Tuple[int, float, float]:
-        """
-        Choose action from current policy given state observation.
-        Returns: (action, log_prob, state_value)
-        """
         state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
             dist = self.actor(state_t)
@@ -151,7 +127,6 @@ class PPOAgent:
         state_value: float,
         done: bool,
     ):
-        """Append step transition into the rollout buffer."""
         self.buffer.states.append(torch.FloatTensor(state).to(self.device))
         self.buffer.actions.append(torch.tensor(action, dtype=torch.long).to(self.device))
         self.buffer.logprobs.append(torch.tensor(log_prob, dtype=torch.float32).to(self.device))
@@ -160,7 +135,6 @@ class PPOAgent:
         self.buffer.is_terminals.append(done)
 
     def compute_gae(self, last_val: float = 0.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute Generalized Advantage Estimation (GAE) and discounted returns."""
         rewards = self.buffer.rewards
         values = [v.item() for v in self.buffer.state_values] + [last_val]
         dones = self.buffer.is_terminals
@@ -177,13 +151,11 @@ class PPOAgent:
         advantages_t = torch.tensor(advantages, dtype=torch.float32, device=self.device)
         returns_t = advantages_t + torch.tensor(values[:-1], dtype=torch.float32, device=self.device)
 
-        # Normalize advantages for training stability
+        # Standardize advantages
         advantages_t = (advantages_t - advantages_t.mean()) / (advantages_t.std() + 1e-8)
-
         return advantages_t, returns_t
 
     def update(self) -> Dict[str, float]:
-        """Execute PPO policy and value network updates over rollout trajectories."""
         if len(self.buffer) == 0:
             return {}
 
@@ -213,30 +185,23 @@ class PPOAgent:
                 b_advantages = advantages[batch_idx]
                 b_returns = returns[batch_idx]
 
-                # Evaluate current policy
                 dist = self.actor(b_states)
                 new_logprobs = dist.log_prob(b_actions)
                 entropy = dist.entropy().mean()
 
-                # Ratio: r(theta) = pi_theta(a|s) / pi_theta_old(a|s)
                 ratios = torch.exp(new_logprobs - b_logprobs)
-
-                # Clipped surrogate objective
                 surr1 = ratios * b_advantages
                 surr2 = torch.clamp(ratios, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * b_advantages
                 actor_loss = -torch.min(surr1, surr2).mean() - (self.entropy_coef * entropy)
 
-                # Update Actor
                 self.optimizer_actor.zero_grad()
                 actor_loss.backward()
                 nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=0.5)
                 self.optimizer_actor.step()
 
-                # Evaluate current critic value
                 state_values = self.critic(b_states).squeeze(-1)
                 critic_loss = nn.MSELoss()(state_values, b_returns)
 
-                # Update Critic
                 self.optimizer_critic.zero_grad()
                 critic_loss.backward()
                 nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=0.5)
@@ -256,7 +221,6 @@ class PPOAgent:
         }
 
     def save(self, filepath: str):
-        """Save model weights to file."""
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         torch.save({
             "actor_state_dict": self.actor.state_dict(),
@@ -264,7 +228,6 @@ class PPOAgent:
         }, filepath)
 
     def load(self, filepath: str):
-        """Load model weights from file."""
         checkpoint = torch.load(filepath, map_location=self.device)
         self.actor.load_state_dict(checkpoint["actor_state_dict"])
         self.critic.load_state_dict(checkpoint["critic_state_dict"])

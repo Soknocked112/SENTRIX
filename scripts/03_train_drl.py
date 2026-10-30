@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-03_train_drl.py - Train Deep Reinforcement Learning (PPO) IPS Agent
-"""
 
 import argparse
 import os
@@ -9,7 +6,6 @@ from pathlib import Path
 import sys
 import time
 
-# Ensure project root is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import matplotlib.pyplot as plt
 import numpy as np
@@ -53,7 +49,7 @@ def main():
     device = cfg["drl"].get("device", "cpu")
 
     # Load preprocessed training sequences
-    print(f"[*] Loading training data from {train_npz}...")
+    print(f"Loading training data from {train_npz}...")
     if not os.path.exists(train_npz):
         raise FileNotFoundError(f"Training data not found at {train_npz}. Run 01_preprocess_data.py first.")
 
@@ -61,13 +57,13 @@ def main():
     X_train = train_data["X"]
     y_train = train_data["y"]
     y_bin_train = train_data["y_binary"]
-    print(f"[+] Loaded {len(X_train):,} training sequences of shape {X_train.shape[1:]}")
+    print(f"Loaded {len(X_train):,} training sequences of shape {X_train.shape[1:]}")
 
     # Load pretrained TCN feature extractor if available
     tcn_ckpt_path = os.path.join(ckpt_dir, "tcn_best.pth")
     tcn_model = None
     if os.path.exists(tcn_ckpt_path):
-        print(f"[*] Loading pretrained TCN feature extractor from {tcn_ckpt_path}...")
+        print(f"Loading pretrained TCN feature extractor from {tcn_ckpt_path}...")
         tcn_ckpt = torch.load(tcn_ckpt_path, map_location=device)
         tcn_model = TCNThreatDetector(
             input_features=tcn_ckpt["input_features"],
@@ -77,9 +73,9 @@ def main():
         )
         tcn_model.load_state_dict(tcn_ckpt["model_state_dict"])
         tcn_model.eval()
-        print("[+] Pretrained TCN feature extractor ready.")
+        print("Pretrained TCN feature extractor ready.")
     else:
-        print("[!] No pretrained TCN checkpoint found. Using temporal projection adapter.")
+        print("Note: No pretrained TCN checkpoint found. Using temporal projection adapter.")
 
     # Instantiate Reward Function & Simulator
     reward_fn = IPSRewardFunction(
@@ -108,8 +104,7 @@ def main():
         device=device,
     )
 
-    # Initialize PPO Agent
-    print(f"[*] Initializing PPO Agent (State Dim: {state_dim}, Action Dim: {action_dim})...")
+    print(f"Initializing PPO agent (state_dim={state_dim}, action_dim={action_dim})...")
     agent = PPOAgent(
         state_dim=state_dim,
         action_dim=action_dim,
@@ -125,7 +120,7 @@ def main():
     best_reward = -float("inf")
     history = {"rewards": [], "accuracies": [], "fprs": [], "actor_losses": [], "critic_losses": []}
 
-    print(f"[*] Starting DRL Training for {max_episodes} episodes...")
+    print(f"Starting training for {max_episodes} episodes...")
     start_time = time.time()
 
     for episode in range(1, max_episodes + 1):
@@ -167,7 +162,7 @@ def main():
             agent.save(save_path)
 
     total_time = time.time() - start_time
-    print(f"[+] DRL Training finished in {total_time:.1f}s. Best Single-Episode Reward: {best_reward:.1f}")
+    print(f"Training finished in {total_time:.1f}s. Best single-episode reward: {best_reward:.1f}")
 
     # Plot & Save Training Curves
     plt.figure(figsize=(14, 5))
@@ -202,7 +197,7 @@ def main():
     plt.tight_layout()
     plt.savefig(plot_path, dpi=300)
     plt.close()
-    print(f"[+] DRL Training curves saved to {plot_path}")
+    print(f"Training curves saved to {plot_path}")
 
 
 if __name__ == "__main__":
