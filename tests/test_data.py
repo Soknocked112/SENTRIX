@@ -37,3 +37,47 @@ def test_create_sliding_windows():
     # Check that sequence 0 has last record at index seq_len - 1
     assert y_seq[0] == seq_len - 1
     assert np.allclose(X_seq[0, -1], X[seq_len - 1])
+
+
+def test_load_and_sample_dataset(tmp_path):
+    import pandas as pd
+    from data.preprocess import load_and_sample_dataset
+
+    # Create two synthetic data directories simulating 2017 & 2018
+    dir1 = tmp_path / "dir1"
+    dir2 = tmp_path / "dir2"
+    dir1.mkdir()
+    dir2.mkdir()
+
+    # Create synthetic CSV in dir1
+    df1 = pd.DataFrame({
+        " Destination Port": [80, 443, 22, 8080],
+        " Flow Duration": [1000, 2000, 3000, 4000],
+        "Label": ["BENIGN", "DoS Hulk", "PortScan", "BENIGN"],
+    })
+    df1.to_csv(dir1 / "data1.csv", index=False)
+
+    # Create synthetic CSV in dir2
+    df2 = pd.DataFrame({
+        "Destination Port": [21, 80, 443, 80],
+        "Flow Duration": [5000, 6000, 7000, 8000],
+        "Label": ["FTP-Patator", "DDoS", "Bot", "BENIGN"],
+    })
+    df2.to_csv(dir2 / "data2.csv", index=False)
+
+    X_scaled, y, y_bin, feature_names, scaler = load_and_sample_dataset(
+        data_dirs=[str(dir1), str(dir2)],
+        sample_per_class=2,
+        chunksize=2,
+        random_state=42,
+    )
+
+    assert len(feature_names) == 2
+    assert "Destination Port" in feature_names
+    assert "Flow Duration" in feature_names
+    assert len(X_scaled) == len(y)
+    assert len(y) == len(y_bin)
+    # Scaled output should be float32 or float64 numpy array
+    assert isinstance(X_scaled, np.ndarray)
+    assert scaler is not None
+

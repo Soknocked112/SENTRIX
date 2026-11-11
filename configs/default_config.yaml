@@ -5,14 +5,17 @@ project:
   random_seed: 42
 
 data:
-  raw_data_dir: "CICIDS 2017"
+  raw_data_dir: "CICIDS 2017"  # Legacy single-dir support
+  raw_data_dirs:                # Multi-dataset ingestion
+    - "CICIDS 2017"
+    - "CICIDS 2018"
   processed_data_dir: "data/processed"
   sequence_length: 10          # Number of temporal steps in sliding window
   train_ratio: 0.70
   val_ratio: 0.15
   test_ratio: 0.15
-  # Balanced sampling per class for efficient and balanced training (set null for full dataset)
-  sample_size_per_class: 15000
+  # Balanced sampling per class across datasets (set null for full dataset)
+  sample_size_per_class: 30000
   # Target attack class mapping (6 consolidated classes)
   classes:
     0: "BENIGN"
@@ -23,7 +26,7 @@ data:
     5: "WebAttack"
 
 tcn:
-  input_features: 78           # Standard numeric features extracted from CICIDS 2017
+  input_features: 78           # Standard numeric features extracted from CICIDS 2017 / 2018
   num_channels: [64, 64, 64, 64] # 4 dilated residual blocks (receptive field = 31 steps)
   kernel_size: 3
   dropout: 0.20
@@ -34,7 +37,7 @@ tcn:
   batch_size: 128
   epochs: 15
   early_stopping_patience: 4
-  device: "cpu"                # "cpu" or "cuda"
+  device: "auto"               # "auto", "cuda", or "cpu"
 
 drl:
   state_dim: 40                # 32 (TCN latent embedding) + 8 (flow dynamics & system metrics)
@@ -51,7 +54,7 @@ drl:
   batch_size: 64
   max_episodes: 200
   steps_per_episode: 500
-  device: "cpu"
+  device: "auto"               # "auto", "cuda", or "cpu"
 
 environment:
   # Multi-objective IPS reward formulation
@@ -65,9 +68,12 @@ environment:
   inspect_accuracy_boost: 0.99
 
 ebpf:
+  backend: "cilium"            # Data plane engine: "cilium", "bcc", or "simulator"
   interface: "lo"              # Default network interface for XDP attachment
-  use_simulator: true          # Set true to use high-fidelity simulator, false for real XDP driver
+  use_simulator: true          # Fallback to high-fidelity simulator when daemon/root unavailable
+  socket_path: "/tmp/sentrix_cilium.sock" # Unix Domain Socket for Cilium eBPF daemon
   c_source_path: "c_src/xdp_ips.c"
+  cilium_c_source_path: "c_src/xdp_ips_cilium.c"
   max_blocked_ips: 65536
   max_rate_limits: 65536
   max_flow_stats: 65536
@@ -79,3 +85,36 @@ paths:
   checkpoints_dir: "checkpoints"
   results_dir: "results"
   logs_dir: "logs"
+  artifacts_dir: "artifacts"
+
+profiles:
+  standard:
+    sample_size_per_class: 30000
+    tcn_epochs: 15
+    tcn_batch_size: 128
+    drl_max_episodes: 200
+    drl_steps_per_episode: 500
+    drl_batch_size: 64
+    precompute_latents: true
+
+  edge:
+    description: "Low-resource profile for Edge PCs, Raspberry Pi, Jetson, or low RAM devices"
+    sample_size_per_class: 5000
+    tcn_epochs: 8
+    tcn_batch_size: 32
+    drl_max_episodes: 60
+    drl_steps_per_episode: 250
+    drl_batch_size: 32
+    precompute_latents: true
+    max_samples: 20000
+
+  quick:
+    description: "Ultra-fast sanity testing and CI profile"
+    sample_size_per_class: 1000
+    tcn_epochs: 2
+    tcn_batch_size: 32
+    drl_max_episodes: 10
+    drl_steps_per_episode: 100
+    drl_batch_size: 16
+    precompute_latents: true
+    max_samples: 5000

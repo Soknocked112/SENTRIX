@@ -89,7 +89,7 @@
     "4": "BruteForce",
     "5": "WebAttack"
   },
-  "train_samples": 53079,
-  "val_samples": 11374,
-  "test_samples": 11375
+  "train_samples": 137501,
+  "val_samples": 29464,
+  "test_samples": 29465
 }

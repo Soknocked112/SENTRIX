@@ -5,8 +5,7 @@ from gymnasium import spaces
 import numpy as np
 import torch
 
-from ebpf.bpf_maps import BPFMapInterface
-from ebpf.xdp_simulator import XDPSimulator
+from environment.simulator import BPFMapInterface, XDPSimulator
 from environment.reward_functions import (
     ACTION_DEEP_INSPECT,
     ACTION_DROP,
@@ -31,6 +30,7 @@ class IPSEnvironment(gym.Env):
         y_multi: Optional[np.ndarray] = None,
         y_binary: Optional[np.ndarray] = None,
         tcn_model: Optional[torch.nn.Module] = None,
+        precomputed_latents: Optional[np.ndarray] = None,
         reward_fn: Optional[IPSRewardFunction] = None,
         ebpf_backend: Optional[BPFMapInterface] = None,
         max_steps: int = 500,
@@ -44,6 +44,7 @@ class IPSEnvironment(gym.Env):
         self.y_multi = y_multi
         self.y_binary = y_binary
         self.tcn_model = tcn_model
+        self.precomputed_latents = precomputed_latents
         self.reward_fn = reward_fn or IPSRewardFunction()
         self.ebpf_backend = ebpf_backend or XDPSimulator()
         self.max_steps = max_steps
@@ -118,7 +119,11 @@ class IPSEnvironment(gym.Env):
         else:
             sample_seq = np.zeros((10, 78), dtype=np.float32)
 
-        latent = self._extract_tcn_embedding(sample_seq)
+        if self.precomputed_latents is not None and idx < len(self.precomputed_latents):
+            latent = self.precomputed_latents[idx]
+        else:
+            latent = self._extract_tcn_embedding(sample_seq)
+
         dynamics = self._get_flow_dynamics_features(sample_seq)
         return np.concatenate([latent, dynamics]).astype(np.float32)
 

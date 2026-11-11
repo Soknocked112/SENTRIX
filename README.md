@@ -3,7 +3,8 @@
 ### In-Kernel eBPF/XDP Filtering with Temporal Convolutional Networks and Reinforcement Learning
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![eBPF / XDP](https://img.shields.io/badge/DataPlane-Linux%20eBPF%20%2F%20XDP-orange.svg)](https://ebpf.io/)
+[![Cilium eBPF](https://img.shields.io/badge/DataPlane-Cilium%20eBPF%20%2F%20BCC-purple.svg)](https://github.com/cilium/ebpf)
+[![eBPF / XDP](https://img.shields.io/badge/Kernel-Linux%20eBPF%20%2F%20XDP-orange.svg)](https://ebpf.io/)
 [![PyTorch 2.x](https://img.shields.io/badge/PyTorch-2.x-red.svg)](https://pytorch.org/)
 [![Gymnasium](https://img.shields.io/badge/RL%20Env-Gymnasium-green.svg)](https://gymnasium.farama.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -162,10 +163,23 @@ Generated plots are stored in `results/`:
 ## Project Structure
 
 ```
+├── tcn.py                           # Root-level TCN model interface
+├── drl_agent.py                     # Root-level DRL PPO agent interface
+├── train.py                         # Root unified training runner (TCN + DRL)
+├── evaluate.py                      # Root evaluation runner
+├── run_ips.py                       # Root live IPS runtime runner
+├── train_cloud.ipynb                # Universal Kaggle, Google Colab & Edge PC notebook
 ├── c_src/
-│   ├── xdp_ips.c                    # In-kernel eBPF/XDP C packet filter program
+│   ├── xdp_ips.c                    # BCC in-kernel eBPF/XDP C packet filter
+│   ├── xdp_ips_cilium.c             # Cilium eBPF BTF C packet filter program
+│   ├── bpf_helpers.h                # BTF map macros and BPF helper declarations
 │   ├── common_kern.h                # Struct definitions for 5-tuple, token bucket, and BPF maps
 │   └── Makefile                     # Clang/LLVM build rules for eBPF bytecode
+├── cilium_ebpf/                     # Go-based Cilium eBPF Data Plane
+│   ├── main.go                      # Cilium eBPF daemon, XDP attachment, and IPC socket server
+│   ├── go.mod                       # Go module dependencies (github.com/cilium/ebpf)
+│   ├── Makefile                     # Build & run rules for Cilium eBPF
+│   └── README.md                    # Cilium eBPF subsystem guide
 ├── configs/
 │   └── default_config.yaml          # Model hyperparameters, environment, and path configs
 ├── data/
@@ -174,6 +188,7 @@ Generated plots are stored in `results/`:
 │   └── __init__.py
 ├── ebpf/
 │   ├── bpf_maps.py                  # Map interfaces and dataclasses
+│   ├── cilium_manager.py            # Python client for Cilium eBPF IPC daemon
 │   ├── xdp_manager.py               # BCC loader and kernel attachment with fallback
 │   ├── xdp_simulator.py             # Userspace simulator for non-root testing
 │   └── __init__.py
@@ -187,24 +202,26 @@ Generated plots are stored in `results/`:
 │   └── __init__.py
 ├── engine/
 │   ├── ips_orchestrator.py          # Event loop connecting eBPF maps with TCN-DRL inference
+│   ├── platform_utils.py            # Platform diagnostics, path resolution, and edge presets
 │   ├── cli_monitor.py               # Live terminal status monitor
 │   └── __init__.py
-├── dashboard/
-│   └── app.py                       # Streamlit web dashboard
 ├── scripts/
 │   ├── 01_preprocess_data.py        # Data preprocessing script
-│   ├── 02_train_tcn.py              # TCN model training
-│   ├── 03_train_drl.py              # PPO policy training
+│   ├── 02_train_tcn.py              # TCN model training (with --edge & --amp)
+│   ├── 03_train_drl.py              # PPO policy training (with 50x precomputation)
 │   ├── 04_run_ips.py                # Live IPS pipeline demo
 │   ├── 05_evaluate.py               # Benchmark evaluation script
-│   └── 06_benchmark_high_speed.py   # High-speed network throughput stress test
+│   ├── 06_benchmark_high_speed.py   # High-speed network throughput stress test
+│   └── export_edge_model.py         # TorchScript & INT8 quantization export for edge
 ├── tests/                           # Pytest test suite
+│   ├── test_cilium_manager.py       # Cilium eBPF IPC and socket protocol tests
 │   ├── test_data.py
 │   ├── test_tcn.py
 │   ├── test_env.py
 │   ├── test_drl.py
 │   ├── test_ebpf_simulator.py
-│   └── test_orchestrator.py
+│   ├── test_orchestrator.py
+│   └── test_platform_utils.py       # Platform detection, edge & Kaggle utils
 ├── pyproject.toml
 ├── setup.py
 ├── requirements.txt
@@ -245,27 +262,86 @@ python3 scripts/01_preprocess_data.py --full
 
 ### 3. Train Models
 
+#### Unified Main Folder Runner:
+You can train both models or individual models directly from the main directory:
 ```bash
-# Train the TCN feature extractor (saved to checkpoints/tcn_best.pth)
-python3 scripts/02_train_tcn.py --epochs 6 --batch_size 128
+# Train both TCN and DRL sequentially
+python3 train.py
 
-# Train the PPO agent (saved to checkpoints/drl_ppo_best.pth)
-python3 scripts/03_train_drl.py --episodes 80 --steps_per_episode 300
+# Or train individually
+python3 train.py --model tcn --amp    # GPU-accelerated TCN training
+python3 train.py --model drl          # PPO policy training (50x vectorized)
+
+# Low-resource Edge PC profile (Raspberry Pi, Jetson, Mini PC)
+python3 train.py --edge
 ```
+
+#### Standard / Cloud GPU Training (Desktop, Google Colab, Kaggle):
+```bash
+# Train the TCN feature extractor (CUDA/MPS auto-detected, AMP enabled)
+python3 scripts/02_train_tcn.py --epochs 15 --batch_size 128 --amp
+
+# Train the PPO agent with 50x vectorized latent precomputation
+python3 scripts/03_train_drl.py --episodes 200 --steps_per_episode 500
+```
+
+#### Low-Resource Edge PC Training (Raspberry Pi, NVIDIA Jetson, Intel NUC):
+SENTRIX includes an **`--edge`** profile that bounds RAM under 300MB, caps sample size, tunes CPU threading, and precomputes TCN latent embeddings so that DRL training finishes in minutes on a low-power CPU:
+```bash
+# Preprocess with compact balanced dataset
+python3 scripts/01_preprocess_data.py --edge
+
+# Train TCN with edge parameters (batch size 32, 8 epochs)
+python3 scripts/02_train_tcn.py --edge
+
+# Train PPO agent (60 episodes, 250 steps/ep, vectorized O(1) latent lookup)
+python3 scripts/03_train_drl.py --edge
+
+# Export optimized TorchScript & INT8 quantized models for edge deployment
+python3 scripts/export_edge_model.py
+```
+
+#### Training on Kaggle:
+You can train directly using the provided **`train_cloud.ipynb`** notebook on Kaggle with free NVIDIA T4 x2 or P100 GPUs:
+1. Upload or attach the dataset under `/kaggle/input/` (either raw CSVs or preprocessed `.npz`).
+2. Run `train_cloud.ipynb` or CLI:
+   ```bash
+   python3 scripts/02_train_tcn.py --data_dir /kaggle/input/<dataset-name>/data/processed --amp
+   python3 scripts/03_train_drl.py --data_dir /kaggle/input/<dataset-name>/data/processed
+   ```
+   *The platform utils automatically search `/kaggle/input/` if paths are omitted, and save all outputs to `/kaggle/working/`.*
 
 ### 4. Run Live Pipeline
 
-```bash
-# Simulator mode (runs without root privileges)
-python3 scripts/04_run_ips.py --flows 50 --delay 0.01
+The runtime pipeline supports multiple data plane enforcement engines:
 
-# Kernel mode (attaches real xdp_ips.c to Linux network interface via BCC)
-sudo python3 scripts/04_run_ips.py --kernel --flows 50
+```bash
+# 1. Main folder runner (simulator mode, runs anywhere without root)
+python3 run_ips.py --flows 50 --delay 0.01
+
+# 2. Cilium eBPF mode (connects to Go Cilium eBPF daemon via Unix socket /tmp/sentrix_cilium.sock)
+python3 run_ips.py --backend cilium --flows 50
+
+# 3. BCC Kernel mode (attaches real xdp_ips.c to Linux network interface via BCC)
+sudo python3 run_ips.py --kernel --backend bcc --flows 50
+```
+
+#### Running the Cilium eBPF Data Plane Daemon:
+```bash
+# Build and run the Go Cilium eBPF daemon
+cd cilium_ebpf
+make run IFACE=lo          # Real in-kernel XDP attachment (requires root)
+# Or run mock mode for local testing
+make run-mock
 ```
 
 ### 5. Run Evaluation Benchmarks
 
 ```bash
+# Using root-level runner
+python3 evaluate.py
+
+# Or via scripts
 python3 scripts/05_evaluate.py
 ```
 
@@ -273,12 +349,6 @@ python3 scripts/05_evaluate.py
 
 ```bash
 python3 scripts/06_benchmark_high_speed.py --packets 10000
-```
-
-### 7. Interactive Web Dashboard
-
-```bash
-streamlit run dashboard/app.py
 ```
 
 ---

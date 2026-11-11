@@ -13,14 +13,23 @@ class CICIDSDataset(Dataset):
     Labels: multi-class (0..5) and binary (0 or 1)
     """
 
-    def __init__(self, npz_path: str):
+    def __init__(self, npz_path: str, max_samples: Optional[int] = None):
         if not os.path.exists(npz_path):
             raise FileNotFoundError(f"Processed dataset file not found: {npz_path}")
 
         data = np.load(npz_path)
-        self.X = torch.from_numpy(data["X"]).float()
-        self.y = torch.from_numpy(data["y"]).long()
-        self.y_binary = torch.from_numpy(data["y_binary"]).long()
+        X_arr = data["X"]
+        y_arr = data["y"]
+        y_bin_arr = data["y_binary"]
+
+        if max_samples is not None and max_samples > 0 and max_samples < len(X_arr):
+            X_arr = X_arr[:max_samples]
+            y_arr = y_arr[:max_samples]
+            y_bin_arr = y_bin_arr[:max_samples]
+
+        self.X = torch.from_numpy(X_arr).float()
+        self.y = torch.from_numpy(y_arr).long()
+        self.y_binary = torch.from_numpy(y_bin_arr).long()
 
     def __len__(self) -> int:
         return len(self.X)
@@ -32,19 +41,38 @@ class CICIDSDataset(Dataset):
 def get_dataloaders(
     data_dir: str = "data/processed",
     batch_size: int = 128,
-    num_workers: int = 0,
+    num_workers: Optional[int] = None,
+    pin_memory: Optional[bool] = None,
+    max_train_samples: Optional[int] = None,
+    max_val_samples: Optional[int] = None,
+    max_test_samples: Optional[int] = None,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Factory creating PyTorch DataLoaders for Train, Val, and Test splits."""
     train_path = os.path.join(data_dir, "train_data.npz")
     val_path = os.path.join(data_dir, "val_data.npz")
     test_path = os.path.join(data_dir, "test_data.npz")
 
-    train_ds = CICIDSDataset(train_path)
-    val_ds = CICIDSDataset(val_path)
-    test_ds = CICIDSDataset(test_path)
+    train_ds = CICIDSDataset(train_path, max_samples=max_train_samples)
+    val_ds = CICIDSDataset(val_path, max_samples=max_val_samples)
+    test_ds = CICIDSDataset(test_path, max_samples=max_test_samples)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    if pin_memory is None:
+        pin_memory = torch.cuda.is_available()
+
+    if num_workers is None:
+        num_workers = 2 if torch.cuda.is_available() else 0
+
+    train_loader = DataLoader(
+        train_ds, batch_size=batch_size, shuffle=True,
+        num_workers=num_workers, pin_memory=pin_memory
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=pin_memory
+    )
+    test_loader = DataLoader(
+        test_ds, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=pin_memory
+    )
 
     return train_loader, val_loader, test_loader

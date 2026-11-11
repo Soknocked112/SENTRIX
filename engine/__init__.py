@@ -1,4 +1,25 @@
-from engine.cli_monitor import CLIMonitor
-from engine.ips_orchestrator import IPSOrchestrator
+"""
+Engine utilities for platform detection and diagnostics.
+"""
 
-__all__ = ["IPSOrchestrator", "CLIMonitor"]
+from engine.platform_utils import (
+    is_kaggle,
+    is_colab,
+    get_device,
+    print_platform_diagnostics,
+    resolve_data_dir,
+    resolve_raw_dirs,
+    resolve_output_dir,
+    get_profile_settings,
+)
+
+__all__ = [
+    "is_kaggle",
+    "is_colab",
+    "get_device",
+    "print_platform_diagnostics",
+    "resolve_data_dir",
+    "resolve_raw_dirs",
+    "resolve_output_dir",
+    "get_profile_settings",
+]

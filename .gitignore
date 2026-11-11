@@ -11,6 +11,8 @@ ENV/
 
 # Large datasets & binaries
 CICIDS 2017/
+CICIDS 2018/
+preprocessed 2018/
 data/processed/*.npz
 data/processed/*.parquet
 artifacts/*.pkl

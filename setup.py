@@ -17,6 +17,5 @@ setup(
         "seaborn>=0.12.0",
         "pyyaml>=6.0",
         "tqdm>=4.65.0",
-        "streamlit>=1.30.0",
     ],
 )

@@ -1,20 +1,85 @@
+from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import dataclass
 import time
 from typing import Dict, List, Optional, Tuple
 
-from ebpf.bpf_maps import BPFMapInterface, BlockRule, FlowKey, FlowStats, IPSMetrics, TokenBucket
 
-# XDP verdict codes
-XDP_PASS = 0
-XDP_DROP = 1
-XDP_TX = 2
-XDP_ABORTED = 3
+@dataclass
+class FlowKey:
+    src_ip: str
+    dst_ip: str
+    src_port: int
+    dst_port: int
+    proto: int
+
+    def __hash__(self):
+        return hash((self.src_ip, self.dst_ip, self.src_port, self.dst_port, self.proto))
 
 
-class XDPSimulator(BPFMapInterface):
+@dataclass
+class FlowStats:
+    packets: int
+    bytes: int
+    first_seen_ns: int
+    last_seen_ns: int
+    tcp_flags: int = 0
+
+
+@dataclass
+class BlockRule:
+    ip: str
+    expiry_ts_ns: int
+    reason: str
+    drop_count: int = 0
+    created_at: float = 0.0
+
+    @property
+    def is_expired(self) -> bool:
+        return time.time_ns() >= self.expiry_ts_ns
+
+
+@dataclass
+class TokenBucket:
+    tokens: float
+    last_update_ns: int
+    rate_pps: float
+    capacity: float
+
+
+@dataclass
+class IPSMetrics:
+    rx_packets: int = 0
+    dropped_packets: int = 0
+    passed_packets: int = 0
+    rate_limited_packets: int = 0
+    inspected_packets: int = 0
+
+    @property
+    def drop_ratio(self) -> float:
+        return self.dropped_packets / max(1, self.rx_packets)
+
+    def to_dict(self) -> Dict[str, float]:
+        return {
+            "rx_packets": self.rx_packets,
+            "dropped_packets": self.dropped_packets,
+            "passed_packets": self.passed_packets,
+            "rate_limited_packets": self.rate_limited_packets,
+            "inspected_packets": self.inspected_packets,
+            "drop_ratio": self.drop_ratio,
+        }
+
+
+# Verdict codes
+ACTION_PASS = 0
+ACTION_DROP = 1
+ACTION_TX = 2
+ACTION_ABORTED = 3
+
+
+class NetworkActionSimulator:
     """
-    Userspace simulator for the XDP filtering pipeline.
-    Replicates BPF map lookups and token-bucket throttling for testing without root.
+    Simulates packet verdicts and rate limits for offline RL agent training.
     """
 
     def __init__(self, max_blocked: int = 65536, max_rate_limit: int = 65536):
@@ -112,7 +177,7 @@ class XDPSimulator(BPFMapInterface):
             if now_ns < rule.expiry_ts_ns:
                 rule.drop_count += 1
                 self.metrics.dropped_packets += 1
-                return XDP_DROP
+                return ACTION_DROP
             else:
                 del self.blocked_ips[src_ip]
 
@@ -131,7 +196,7 @@ class XDPSimulator(BPFMapInterface):
             else:
                 self.metrics.dropped_packets += 1
                 self.metrics.rate_limited_packets += 1
-                return XDP_DROP
+                return ACTION_DROP
 
         # Update 5-tuple flow stats
         key = FlowKey(src_ip, dst_ip, src_port, dst_port, proto)
@@ -151,4 +216,9 @@ class XDPSimulator(BPFMapInterface):
             )
 
         self.metrics.passed_packets += 1
-        return XDP_PASS
+        return ACTION_PASS
+
+
+# Aliases for compatibility
+BPFMapInterface = NetworkActionSimulator
+XDPSimulator = NetworkActionSimulator
