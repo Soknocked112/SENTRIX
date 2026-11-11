@@ -163,8 +163,10 @@ def resolve_raw_dirs(
     # Check if configured directories exist and contain CSV files
     valid_dirs = []
     for d in raw_list:
-        if os.path.isdir(d) and len(glob.glob(os.path.join(d, "*.csv"))) > 0:
-            valid_dirs.append(d)
+        if os.path.isdir(d):
+            csvs = [f for f in os.listdir(d) if f.lower().endswith(".csv")]
+            if csvs:
+                valid_dirs.append(d)
 
     if valid_dirs:
         return valid_dirs
@@ -172,13 +174,33 @@ def resolve_raw_dirs(
     # Scan Kaggle input directories
     if is_kaggle() or os.path.exists("/kaggle/input"):
         logger.info("Scanning /kaggle/input for raw CSV dataset directories...")
-        kaggle_csvs = glob.glob("/kaggle/input/**/*.csv", recursive=True)
-        if kaggle_csvs:
-            discovered_dirs = sorted(list({os.path.dirname(f) for f in kaggle_csvs}))
-            logger.info(f"Auto-detected {len(discovered_dirs)} dataset directories in /kaggle/input:")
-            for dd in discovered_dirs:
+        discovered_dirs = set()
+        for root, dirs, files in os.walk("/kaggle/input"):
+            for f in files:
+                if f.lower().endswith(".csv"):
+                    discovered_dirs.add(root)
+                    break
+
+        if discovered_dirs:
+            sorted_dirs = sorted(list(discovered_dirs))
+            logger.info(f"Auto-detected {len(sorted_dirs)} dataset directories in /kaggle/input:")
+            for dd in sorted_dirs:
                 logger.info(f"  - {dd}")
-            return discovered_dirs
+            return sorted_dirs
+        else:
+            contents = []
+            if os.path.exists("/kaggle/input"):
+                try:
+                    contents = os.listdir("/kaggle/input")
+                except Exception:
+                    pass
+            raise FileNotFoundError(
+                f"No CSV files found anywhere in /kaggle/input (current items in /kaggle/input: {contents}).\n\n"
+                "Please make sure you have attached the datasets to this notebook:\n"
+                "1. Click '+ Add Input' in Kaggle's right sidebar.\n"
+                "2. Search and add 'CICIDS 2017' and 'CICIDS 2018' (e.g. 'ids-intrusion-csv').\n"
+                "3. Once added, run !ls /kaggle/input to verify the folders are visible."
+            )
 
     return raw_list
 

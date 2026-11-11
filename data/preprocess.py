@@ -195,7 +195,12 @@ def load_and_sample_dataset(
 
     csv_files = []
     for d in data_dirs:
-        found = sorted(glob.glob(os.path.join(d, "*.csv")))
+        found = []
+        if os.path.isdir(d):
+            for root, _, files in os.walk(d):
+                for f in sorted(files):
+                    if f.lower().endswith(".csv"):
+                        found.append(os.path.join(root, f))
         if not found:
             logger.warning(f"No CSV files found in {d}")
         csv_files.extend(found)
